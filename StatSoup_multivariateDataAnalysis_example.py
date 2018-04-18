@@ -255,7 +255,7 @@ groupvariable = y
 # find out how many values the group variables can take
 unique_groups = groupvariable.unique
 num_unique_groups = len(unique_groups)
-CovW = 0.0
+cov_w = 0.0
 
 # get the covarance of variable 1 and variable 2 for each groups
 for i in unique_groups:
@@ -263,6 +263,16 @@ for i in unique_groups:
     group_i_var2 = variable2
     mean_var1 = np.mean(group_i_var1)
     mean_var2 = np.mean(group_i_var2)
+    len_group_i = len(group_i_var1)
+    # get the covariance for this group
+    cov_j = 0.0
+    for q,k in zip(group_i_var1, group_i_var2):
+        cov_j += (q - mean1)*(k - mean2)
+    cov_group_i = cov_j 
+    cov_w += cov_group_i
+totallength = len
+    
+    
     
 
 
