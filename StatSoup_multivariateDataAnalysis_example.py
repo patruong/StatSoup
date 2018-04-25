@@ -11,12 +11,20 @@ Code for tutorials in the useful links:
 
 
 """
+from __future__ import print_function
+
 
 import numpy as np
 from matplotlib.pyplot import scatter
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
+
+from sklearn.preprocessing import scale
+from sklearn.decomposition import PCA
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from scipy import stats
+from IPython.display import display, HTML
 
 
 import statsmodels.api as sm
@@ -247,59 +255,394 @@ def calcWithinGroupsCovariance(variable1, variable2, groupvariable):
     Covw /= totallength - numlevels
     return Covw
 
-variable = X.V8
-variable = X.V11
-groupvariable = y
 
 
-# find out how many values the group variables can take
-unique_groups = groupvariable.unique
-num_unique_groups = len(unique_groups)
-cov_w = 0.0
-
-# get the covarance of variable 1 and variable 2 for each groups
-for i in unique_groups:
-    group_i_var1 = variable1
-    group_i_var2 = variable2
-    mean_var1 = np.mean(group_i_var1)
-    mean_var2 = np.mean(group_i_var2)
-    len_group_i = len(group_i_var1)
-    # get the covariance for this group
-    cov_j = 0.0
-    for q,k in zip(group_i_var1, group_i_var2):
-        cov_j += (q - mean1)*(k - mean2)
-    cov_group_i = cov_j 
-    cov_w += cov_group_i
-totallength = len
-    
-    
-    
-
-
-def calcBetweenGroupsVariance(variable, groupvariable): #own formula for understanding
-    
-    # find out how many values the group variable can take
+def calcWithinGroupsCovariance(variable1, variable2, groupvariable):
+    # find out how many values the group variables can take
     unique_groups = groupvariable.unique()
     num_unique_groups = len(unique_groups)
+    cov_w = 0.0
     
-    #calculate the overall grand mean
-    grand_mean = np.mean(variable)
-    
-    # the the mean and standard deviation for each group
-    num_total = 0
-    denom_total = 0
+    # get the covarance of variable 1 and variable 2 for each groups
     for i in unique_groups:
-        group_i = variable[groupvariable == i]
-        len_group_i = len(group_i)
-        # get the mean and standard deviation for group i
-        mean_i = np.mean(group_i)
-        std_i = np.std(group_i)
-        # Between-group variance formula
-        num_i = (len_group_i) * ((mean_i - grand_mean)**2)
-        denom_i = (len_group_i)
-        # Summation procedure in between-group variance formula
-        num_total = num_total + num_i
-        denom_total = denom_total + denom_i
-    # valvulate the between-groups variance
-    V_b = num_total / (num_unique_groups - 1) 
-    return(V_b)
+        group_i_var1 = variable1[groupvariable == i]
+        group_i_var2 = variable2[groupvariable == i]
+        mean_var1 = np.mean(group_i_var1) #for each group in var1
+        mean_var2 = np.mean(group_i_var2) #for each group in var2
+        len_group_i = len(group_i_var1)
+        # get the covariance for this group
+        cov_j = 0.0
+        for q,k in zip(group_i_var1, group_i_var2):
+            cov_j += (q - mean_var1)*(k - mean_var2)
+        cov_group_i = cov_j 
+        cov_w += cov_group_i
+    totallength = len(variable1)
+    cov_w = cov_w / (totallength - num_unique_groups)
+    return cov_w
+
+
+def calcBetweenGroupsCovariance(variable1, variable2, groupvariable):
+    # find out how many values the group variable can take
+    levels = sorted(set(groupvariable))
+    numlevels = len(levels)
+    # calculate the grand means
+    variable1mean = np.mean(variable1)
+    variable2mean = np.mean(variable2)
+    # calculate the between-groups covariance
+    Covb = 0.0
+    for leveli in levels:
+        levelidata1 = variable1[groupvariable==leveli]
+        levelidata2 = variable2[groupvariable==leveli]
+        mean1 = np.mean(levelidata1)
+        mean2 = np.mean(levelidata2)
+        levelilength = len(levelidata1)
+        term1 = (mean1 - variable1mean) * (mean2 - variable2mean) * levelilength
+        Covb += term1
+    Covb /= numlevels - 1
+    return Covb
+
+
+variable1 = X.V8
+variable2 = X.V11
+groupvariable = y
+def calcBetweenGroupsCovariance(variable1, variable2, groupvariable):
+    # find out how many values the goup variable can take
+    unique_groups = groupvariable.unique()
+    num_unique_groups = len(unique_groups)
+    # calculate the grand means
+    var1_Gmean = np.mean(variable1)
+    var2_Gmean = np.mean(variable2)
+    # calculate the between-groups covariance
+    cov_b = 0.0
+    for i in unique_groups:
+        group_i_var1 = variable1[groupvariable == i]
+        group_i_var2 = variable2[groupvariable == i]
+        mean_var1 = np.mean(group_i_var1)
+        mean_var2 = np.mean(group_i_var2)
+        len_group_i = len(group_i_var1)
+        cov_i = (mean_var1 - var1_Gmean) * (mean_var2 - var2_Gmean) * len_group_i
+        cov_b += cov_i
+    cov_b = cov_b / (num_unique_groups - 1)
+    return Covb
+
+
+#######################
+## OTHER THAN MANOVA ##
+#######################
+    
+## Calculating Correlations for Multivariate Data
+corr = stats.pearsonr(X.V2, X.V3)
+print("p-value:\t", corr[1])
+print("cor:\t\t", corr[0])
+
+corrmat = X.corr()
+
+sns.heatmap(corrmat, vmax = 1., square = False).xaxis.tick_top()
+
+# adapted from http://matplotlib.org/examples/specialty_plots/hinton_demo.html
+def hinton(matrix, max_weight=None, ax=None):
+    """Draw Hinton diagram for visualizing a weight matrix."""
+    ax = ax if ax is not None else plt.gca()
+
+    if not max_weight:
+        max_weight = 2**np.ceil(np.log(np.abs(matrix).max())/np.log(2))
+
+    ax.patch.set_facecolor('lightgray')
+    ax.set_aspect('equal', 'box')
+    ax.xaxis.set_major_locator(plt.NullLocator())
+    ax.yaxis.set_major_locator(plt.NullLocator())
+
+    for (x, y), w in np.ndenumerate(matrix):
+        color = 'red' if w > 0 else 'blue'
+        size = np.sqrt(np.abs(w))
+        rect = plt.Rectangle([x - size / 2, y - size / 2], size, size,
+                             facecolor=color, edgecolor=color)
+        ax.add_patch(rect)
+
+    nticks = matrix.shape[0]
+    ax.xaxis.tick_top()
+    ax.set_xticks(range(nticks))
+    ax.set_xticklabels(list(matrix.columns), rotation=90)
+    ax.set_yticks(range(nticks))
+    ax.set_yticklabels(matrix.columns)
+    ax.grid(False)
+
+    ax.autoscale_view()
+    ax.invert_yaxis()
+
+hinton(corrmat)
+
+def mosthighlycorrelated(mydataframe, numtoreport):
+    # find the correlations
+    cormatrix = mydataframe.corr()
+    # set the correlations on the diagonal or lower triangle to zero,
+    # so they will not be reported as the highest ones:
+    cormatrix *= np.tri(*cormatrix.values.shape, k=-1).T
+    # find the top n correlations
+    cormatrix = cormatrix.stack()
+    cormatrix = cormatrix.reindex(cormatrix.abs().sort_values(ascending=False).index).reset_index()
+    # assign human-friendly names
+    cormatrix.columns = ["FirstVariable", "SecondVariable", "Correlation"]
+    return cormatrix.head(numtoreport)
+
+mosthighlycorrelated(X, 10)
+
+# Standardising Variables
+
+standardisedX = scale(X)
+standardisedX = pd.DataFrame(standardisedX, index=X.index, columns=X.columns)
+
+standardisedX.apply(np.mean)
+standardisedX.apply(np.std)
+
+# PCA
+pca = PCA().fit(standardisedX)
+
+def pca_summary(pca, standardised_data, out=True):
+    names = ["PC"+str(i) for i in range(1, len(pca.explained_variance_ratio_)+1)]
+    a = list(np.std(pca.transform(standardised_data), axis=0))
+    b = list(pca.explained_variance_ratio_)
+    c = [np.sum(pca.explained_variance_ratio_[:i]) for i in range(1, len(pca.explained_variance_ratio_)+1)]
+    columns = pd.MultiIndex.from_tuples([("sdev", "Standard deviation"), ("varprop", "Proportion of Variance"), ("cumprop", "Cumulative Proportion")])
+    summary = pd.DataFrame(zip(a, b, c), index=names, columns=columns)
+    if out:
+        print("Importance of components:")
+        display(summary)
+    return summary
+
+summary = pca_summary(pca, standardisedX)
+
+summary.sdev
+
+#Total variance explained by the components is the sum of the variances of the components
+np.sum(summary.sdev**2)
+
+## Deciding how many principal components to retain
+def screeplot(pca, standardised_values):
+    y = np.std(pca.transform(standardised_values), axis=0)**2
+    x = np.arange(len(y)) + 1
+    plt.plot(x, y, "o-")
+    plt.xticks(x, ["Comp."+str(i) for i in x], rotation=60)
+    plt.ylabel("Variance")
+    plt.show()
+
+screeplot(pca, standardisedX)
+
+summary.sdev**2
+
+"""
+Kaiser’s criterion: that we should only retain principal components for which 
+the variance is above 1 (when principal component analysis was applied to 
+standardised data)
+"""
+
+summary.cumprop
+
+## Loadings for principal components
+
+
+pca.components_[0] # note that loadings are for standardized versions Z1..Zk of V1..Vk
+
+np.sum(pca.components_[0]**2) # loadings for a PC so 1.
+
+
+def calcpc(variables, loadings):
+    # find the number of samples in the data set and the number of variables
+    numsamples, numvariables = variables.shape
+    # make a vector to store the component
+    pc = np.zeros(numsamples)
+    # calculate the value of the component for each sample
+    for i in range(numsamples):
+        valuei = 0
+        for j in range(numvariables):
+            valueij = variables.iloc[i, j]
+            loadingj = loadings[j]
+            valuei = valuei + (valueij * loadingj)
+        pc[i] = valuei
+    return pc
+
+calcpc(standardisedX, pca.components_[0])
+
+plt.plot(calcpc(standardisedX, pca.components_[0]))
+
+pca.transform(standardisedX)[:, 0]
+
+plt.plot(pca.transform(standardisedX)[:, 0])
+
+# Scatterplots of the Principal Components
+
+def pca_scatter(pca, standardised_values, classifs):
+    foo = pca.transform(standardised_values)
+    bar = pd.DataFrame(zip(foo[:, 0], foo[:, 1], classifs), columns=["PC1", "PC2", "Class"])
+    sns.lmplot("PC1", "PC2", bar, hue="Class", fit_reg=False)
+
+pca_scatter(pca, standardisedX, y)
+
+printMeanAndSdByGroup(standardisedX, y);
+
+## Linear Discriminant Analysis
+
+lda = LinearDiscriminantAnalysis().fit(X, y)
+
+def pretty_scalings(lda, X, out=False):
+    ret = pd.DataFrame(lda.scalings_, index=X.columns, columns=["LD"+str(i+1) for i in range(lda.scalings_.shape[1])])
+    if out:
+        print("Coefficients of linear discriminants:")
+        display(ret)
+    return ret
+
+pretty_scalings_ = pretty_scalings(lda, X, out=True)
+
+lda.scalings_[:, 0]
+
+pretty_scalings_.LD1
+
+def calclda(variables, loadings):
+    # find the number of samples in the data set and the number of variables
+    numsamples, numvariables = variables.shape
+    # make a vector to store the discriminant function
+    ld = np.zeros(numsamples)
+    # calculate the value of the discriminant function for each sample
+    for i in range(numsamples):
+        valuei = 0
+        for j in range(numvariables):
+            valueij = variables.iloc[i, j]
+            loadingj = loadings[j]
+            valuei = valuei + (valueij * loadingj)
+        ld[i] = valuei
+    # standardise the discriminant function so that its mean value is 0:
+    ld = scale(ld, with_std=False)
+    return ld
+
+# calculate LDA for each sample with our LDA1 loading
+calclda(X, lda.scalings_[:, 0])
+
+plt.plot(calclda(X, lda.scalings_[:, 0]))
+
+# Try either, they produce the same result, use help() for more info
+# lda.transform(X)[:, 0]
+lda.fit_transform(X, y)[:, 0]
+
+def groupStandardise(variables, groupvariable):
+    # find the number of samples in the data set and the number of variables
+    numsamples, numvariables = variables.shape
+    # find the variable names
+    variablenames = variables.columns
+    # calculate the group-standardised version of each variable
+    variables_new = pd.DataFrame()
+    for i in range(numvariables):
+        variable_name = variablenames[i]
+        variablei = variables[variable_name]
+        variablei_Vw = calcWithinGroupsVariance(variablei, groupvariable)
+        variablei_mean = np.mean(variablei)
+        variablei_new = (variablei - variablei_mean)/(np.sqrt(variablei_Vw))
+        variables_new[variable_name] = variablei_new
+    return variables_new
+
+groupstandardisedX = groupStandardise(X, y)
+
+lda2 = LinearDiscriminantAnalysis().fit(groupstandardisedX, y)
+pretty_scalings(lda2, groupstandardisedX)
+
+lda.fit_transform(X, y)[:, 0] 
+lda2.fit_transform(groupstandardisedX, y)[:, 0]
+#Actual values for standardized and non-standardized are the same
+plt.plot(lda.fit_transform(X, y)[:, 0] )
+plt.plot(lda2.fit_transform(groupstandardisedX, y)[:, 0])
+
+## Separation Achieved by the Discriminant Functions
+def rpredict(lda, X, y, out=False):
+    ret = {"class": lda.predict(X),
+           "posterior": pd.DataFrame(lda.predict_proba(X), columns=lda.classes_)}
+    ret["x"] = pd.DataFrame(lda.fit_transform(X, y))
+    ret["x"].columns = ["LD"+str(i+1) for i in range(ret["x"].shape[1])]
+    if out:
+        print("class")
+        print(ret["class"])
+        print()
+        print("posterior")
+        print(ret["posterior"])
+        print()
+        print("x")
+        print(ret["x"])
+    return ret
+
+lda_values = rpredict(lda, standardisedX, y, True)
+
+calcSeparations(lda_values["x"], y)
+
+
+def proportion_of_trace(lda):
+    ret = pd.DataFrame([round(i, 4) for i in lda.explained_variance_ratio_ if round(i, 4) > 0], columns=["ExplainedVariance"])
+    ret.index = ["LD"+str(i+1) for i in range(ret.shape[0])]
+    ret = ret.transpose()
+    print("Proportion of trace:")
+    print(ret.to_string(index=False))
+    return ret
+
+proportion_of_trace(LinearDiscriminantAnalysis(solver="eigen").fit(X, y));
+
+
+## Stacked Histogram of the LDA Values
+
+def ldahist(data, g, sep=False):
+    xmin = np.trunc(np.min(data)) - 1
+    xmax = np.trunc(np.max(data)) + 1
+    ncol = len(set(g))
+    binwidth = 0.5
+    bins=np.arange(xmin, xmax + binwidth, binwidth)
+    if sep:
+        fig, axl = plt.subplots(ncol, 1, sharey=True, sharex=True)
+    else:
+        fig, axl = plt.subplots(1, 1, sharey=True, sharex=True)
+        axl = [axl]*ncol
+    for ax, (group, gdata) in zip(axl, data.groupby(g)):
+        sns.distplot(gdata.values, bins, ax=ax, label="group "+str(group))
+        ax.set_xlim([xmin, xmax])
+        if sep:
+            ax.set_xlabel("group"+str(group))
+        else:
+            ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+    plt.tight_layout()
+    
+ldahist(lda_values["x"].LD1, y)
+ldahist(lda_values["x"].LD2, y)
+
+# LDA scatter
+sns.lmplot("LD1", "LD2", lda_values["x"].join(y), hue="V1", fit_reg=False);
+
+
+printMeanAndSdByGroup(lda_values["x"], y);
+
+
+
+
+import sklearn.metrics as metrics
+
+def lda_classify(v, levels, cutoffpoints):
+    for level, cutoff in zip(reversed(levels), reversed(cutoffpoints)):
+        if v > cutoff: return level
+    return levels[0]
+    
+y_pred = lda_values["x"].iloc[:, 0].apply(lda_classify, args=(lda.classes_, [-1.751107, 2.122505],)).values
+y_true = y
+
+
+# from http://scikit-learn.org/stable/auto_examples/model_selection/plot_confusion_matrix.html#example-model-selection-plot-confusion-matrix-py
+def plot_confusion_matrix(cm, target_names, title='Confusion matrix', cmap=plt.cm.Blues):
+    plt.imshow(cm, interpolation='nearest', cmap=cmap)
+    plt.title(title)
+    plt.colorbar()
+    tick_marks = np.arange(len(target_names))
+    plt.xticks(tick_marks, target_names, rotation=45)
+    plt.yticks(tick_marks, target_names)
+    plt.tight_layout()
+    plt.ylabel('True label')
+    plt.xlabel('Predicted label')
+
+print(metrics.classification_report(y_true, y_pred))
+cm = metrics.confusion_matrix(y_true, y_pred)
+#webprint_confusion_matrix(cm, lda.classes_)
+cm_normalized = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+plot_confusion_matrix(cm_normalized, lda.classes_, title='Normalized confusion matrix')
+
